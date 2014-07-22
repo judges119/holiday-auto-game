@@ -2,18 +2,12 @@ var dgram = require('dgram');
 
 var width = 3; //Width of map
 var height = 3; //Height of map
-var map = new Array(width); //Map
-for (var i = 0; i < width; i++) { //Map (cont)
-	map[i] = new Array(height);
-	for (var j = 0; j < height; j++) {
-		map[i][j] = 0;
-	}
-}
-
-var playerx = 1; //Player x and y coordinates mapped to world, not map
-var playery = 1;
-var playerdir = 0; //Player direction
-var topleftx = 0; //Reference to the x and y coordinates of the top-left of the display on the map
+var map; //Directional map used to map out passages in maze
+var world; //World which uses map, with false representing wall segments, true representing available space
+var playerx = width * 2 - 1; //Player x and y coordinates mapped to world, not map
+var playery = height * 2 - 1;
+var playerdir = 4; //Player direction
+var topleftx = 0; //Reference to the x and y coordinates of the top-left of the display on the map (not currently used for anything)
 var toplefty = 0;
 
 /*
@@ -52,28 +46,94 @@ function carve_passages(cx, cy, grid) {
 	}
 }
 
-carve_passages(0, 0, map);
-
-var world = new Array(width * 2 + 1); //World which uses map, false representing wall, true representing available space
-for (var i = 0; i < width * 2 + 1; i++) {
-	world[i] = new Array(height * 2 + 1);
+/*
+ * Set up the world variable from the directional map
+ */
+function set_up_world(map, world) {
+	for (var i = 0; i < width; i++) {
+		for (var j = 0; j < height; j++) {
+			world[i * 2 + 1][j * 2 + 1] = true;
+			if ((map[i][j] & 1) == 1) {
+				world[i * 2][j * 2 + 1] = true;
+			}
+			if ((map[i][j] & 2) == 2) {
+				world[i * 2 + 2][j * 2 + 1] = true;
+			}
+			if ((map[i][j] & 4) == 4) {
+				world[i * 2 + 1][j * 2] = true;
+			}
+			if ((map[i][j] & 8) == 8) {
+				world[i * 2 + 1][j * 2 + 2] = true;
+			}
+		}
+	}
 }
 
-for (var i = 0; i < width; i++) {
-	for (var j = 0; j < height; j++) {
-		world[i * 2 + 1][j * 2 + 1] = true;
-		if ((map[i][j] & 1) == 1) {
-			world[i * 2][j * 2 + 1] = true;
-		}
-		if ((map[i][j] & 2) == 2) {
-			world[i * 2 + 2][j * 2 + 1] = true;
-		}
-		if ((map[i][j] & 4) == 4) {
-			world[i * 2 + 1][j * 2] = true;
-		}
-		if ((map[i][j] & 8) == 8) {
-			world[i * 2 + 1][j * 2 + 2] = true;
-		}
+/*
+ * Simple function that controls player movement based on the right-hand maze traversal system
+ */
+function player_movement(dir) {
+	switch (playerdir) { //Make a move based on the right-hand maze traversal rule
+		case 1:
+			if (dir.indexOf(4) > -1) {
+				playery--
+				playerdir = 4;
+			} else if (dir.indexOf(1) > -1) {
+				playerx--
+				playerdir = 1;
+			} else if (dir.indexOf(8) > -1) {
+				playery++
+				playerdir = 8;
+			} else {
+				playerx++;
+				playerdir = 2;
+			}
+			break;
+		case 2:
+			if (dir.indexOf(8) > -1) {
+				playery++
+				playerdir = 8;
+			} else if (dir.indexOf(2) > -1) {
+				playerx++
+				playerdir = 2;
+			} else if (dir.indexOf(4) > -1) {
+				playery--
+				playerdir = 4;
+			} else {
+				playerx--;
+				playerdir = 1;
+			}
+			break;
+		case 4:
+			if (dir.indexOf(2) > -1) {
+				playerx++
+				playerdir = 2;
+			} else if (dir.indexOf(4) > -1) {
+				playery--
+				playerdir = 4;
+			} else if (dir.indexOf(1) > -1) {
+				playerx--
+				playerdir = 1;
+			} else {
+				playery++;
+				playerdir = 8;
+			}
+			break;
+		case 8:
+			if (dir.indexOf(1) > -1) {
+				playerx--
+				playerdir = 1;
+			} else if (dir.indexOf(8) > -1) {
+				playery++
+				playerdir = 8;
+			} else if (dir.indexOf(2) > -1) {
+				playerx++
+				playerdir = 2;
+			} else {
+				playery--;
+				playerdir = 4;
+			}
+			break;
 	}
 }
 
@@ -127,53 +187,34 @@ function send_to_holiday(tlx, tly, world) {
 	}
 	
 	var s = dgram.createSocket('udp4'); //Create UDP socket to send data over
-	s.send(buf, 0, buf.length, 9988, "192.168.0.115", function(err, bytes) { //Send data about lights over UDP socket and then close
-	  s.close();
+	s.send(buf, 0, buf.length, 9988, process.argv[2], function(err, bytes) { //Send data about lights over UDP socket (IP address of Holiday passed as argument...
+	  s.close(); //...and then close
 	});
 }
 
-send_to_holiday(topleftx, toplefty, world)
-
-setInterval(function() {
-	if ((playerx == width * 2 - 1) && (playery == height * 2 - 1)) {
-		playerx = 1;
+setInterval(function() { //Iterate through this every so many milliseconds
+	if ((playerx == width * 2 - 1) && (playery == height * 2 - 1)) { //If player in winning spot (bottom-right corner)...
+		playerx = 1; //Reset player coordinates
 		playery = 1;
-		topleftx = 0;
+		topleftx = 0; //Reset screen coordinates (not currently used)
 		toplefty = 0;
 		
-		map = new Array(width); //Map
-		for (var i = 0; i < width; i++) { //Map (cont)
+		map = new Array(width); //Reset map
+		for (var i = 0; i < width; i++) {
 			map[i] = new Array(height);
 			for (var j = 0; j < height; j++) {
 				map[i][j] = 0;
 			}
 		}
-		carve_passages(0, 0, map);
-		
-		world = new Array(width * 2 + 1); //World which uses map, false representing wall, true representing available space
+		world = new Array(width * 2 + 1); //Reset world
 		for (var i = 0; i < width * 2 + 1; i++) {
 			world[i] = new Array(height * 2 + 1);
 		}
 		
-		for (var i = 0; i < width; i++) {
-			for (var j = 0; j < height; j++) {
-				world[i * 2 + 1][j * 2 + 1] = true;
-				if ((map[i][j] & 1) == 1) {
-					world[i * 2][j * 2 + 1] = true;
-				}
-				if ((map[i][j] & 2) == 2) {
-					world[i * 2 + 2][j * 2 + 1] = true;
-				}
-				if ((map[i][j] & 4) == 4) {
-					world[i * 2 + 1][j * 2] = true;
-				}
-				if ((map[i][j] & 8) == 8) {
-					world[i * 2 + 1][j * 2 + 2] = true;
-				}
-			}
-		}
+		carve_passages(0, 0, map); //Create new maze
+		set_up_world(map, world); //Transcribe maze to world representation
 	} else {
-		var dir = [];
+		var dir = []; //Collect available player directions
 		if (world[playerx + 1][playery] == true) {
 			dir.push(2);
 		}
@@ -186,92 +227,9 @@ setInterval(function() {
 		if (world[playerx][playery - 1] == true) {
 			dir.push(4);
 		}
-		if (playerdir == 0) {
-			switch (dir[0]) {
-				case 1:
-					playerx--;
-					playerdir = 1;
-					break;
-				case 2:
-					playerx++;
-					playerdir = 2;
-					break;
-				case 4:
-					playery--;
-					playerdir = 4;
-					break;
-				case 8:
-					playery++;
-					playerdir = 8;
-					break;
-			}
-		} else {
-			switch (playerdir) {
-				case 1:
-					if (dir.indexOf(4) > -1) {
-						playery--
-						playerdir = 4;
-					} else if (dir.indexOf(1) > -1) {
-						playerx--
-						playerdir = 1;
-					} else if (dir.indexOf(8) > -1) {
-						playery++
-						playerdir = 8;
-					} else {
-						playerx++;
-						playerdir = 2;
-					}
-					break;
-				case 2:
-					if (dir.indexOf(8) > -1) {
-						playery++
-						playerdir = 8;
-					} else if (dir.indexOf(2) > -1) {
-						playerx++
-						playerdir = 2;
-					} else if (dir.indexOf(4) > -1) {
-						playery--
-						playerdir = 4;
-					} else {
-						playerx--;
-						playerdir = 1;
-					}
-					break;
-				case 4:
-					if (dir.indexOf(2) > -1) {
-						playerx++
-						playerdir = 2;
-					} else if (dir.indexOf(4) > -1) {
-						playery--
-						playerdir = 4;
-					} else if (dir.indexOf(1) > -1) {
-						playerx--
-						playerdir = 1;
-					} else {
-						playery++;
-						playerdir = 8;
-					}
-					break;
-				case 8:
-					if (dir.indexOf(1) > -1) {
-						playerx--
-						playerdir = 1;
-					} else if (dir.indexOf(8) > -1) {
-						playery++
-						playerdir = 8;
-					} else if (dir.indexOf(2) > -1) {
-						playerx++
-						playerdir = 2;
-					} else {
-						playery--;
-						playerdir = 4;
-					}
-					break;
-			}
-		}
-		
-		topleftx = ((playerx < 3) || (playerx > width * 2 - 3)) ? topleftx : playerx - 3;
-		toplefty = ((playery < 3) || (playery > height * 2 - 3)) ? toplefty : playery - 3;
+		player_movement(dir);
+//		topleftx = ((playerx < 3) || (playerx > width * 2 - 3)) ? topleftx : playerx - 3;
+//		toplefty = ((playery < 3) || (playery > height * 2 - 3)) ? toplefty : playery - 3;
 	}
 	send_to_holiday(topleftx, toplefty, world)
-}, 1500);
+}, 500);
