@@ -1,7 +1,7 @@
 var dgram = require('dgram');
 
-var width = 10; //Width of map
-var height = 10; //Height of map
+var width = 3; //Width of map
+var height = 3; //Height of map
 var map = new Array(width); //Map
 for (var i = 0; i < width; i++) { //Map (cont)
 	map[i] = new Array(height);
@@ -12,6 +12,7 @@ for (var i = 0; i < width; i++) { //Map (cont)
 
 var playerx = 1; //Player x and y coordinates mapped to world, not map
 var playery = 1;
+var playerdir = 0; //Player direction
 var topleftx = 0; //Reference to the x and y coordinates of the top-left of the display on the map
 var toplefty = 0;
 
@@ -90,13 +91,13 @@ function send_to_holiday(tlx, tly, world) {
 	
 	var x = 10; //Skipping first ten bytes of packet/buffer
 	for (var i = tlx; i < tlx + 7; i++) { //Set the lights white if wall, blank if passageway for the visible area
-		if (i % 2 == 0) {
+		if ((i % 2 == 0) && (tly % 2 == 0)) {
 			for (var j = tly; j < tly + 7; j++) {
-				if (!world[j][i]) {
+				if (!world[i][j]) {
 					buf.writeUInt8(255, x++);
 					buf.writeUInt8(255, x++);
 					buf.writeUInt8(255, x++);
-				} else if ((j == playerx) && (i == playery)) {
+				} else if ((i == playerx) && (j == playery)) {
 					buf.writeUInt8(0, x++);
 					buf.writeUInt8(255, x++);
 					buf.writeUInt8(0, x++);
@@ -108,11 +109,11 @@ function send_to_holiday(tlx, tly, world) {
 			}	
 		} else {
 			for (var j = tly + 6; j >= tly; j--) {
-				if (!world[j][i]) {
+				if (!world[i][j]) {
 					buf.writeUInt8(255, x++);
 					buf.writeUInt8(255, x++);
 					buf.writeUInt8(255, x++);
-				} else if ((j == playerx) && (i == playery)) {
+				} else if ((i == playerx) && (j == playery)) {
 					buf.writeUInt8(0, x++);
 					buf.writeUInt8(255, x++);
 					buf.writeUInt8(0, x++);
@@ -131,35 +132,146 @@ function send_to_holiday(tlx, tly, world) {
 	});
 }
 
+send_to_holiday(topleftx, toplefty, world)
+
 setInterval(function() {
+	if ((playerx == width * 2 - 1) && (playery == height * 2 - 1)) {
+		playerx = 1;
+		playery = 1;
+		topleftx = 0;
+		toplefty = 0;
+		
+		map = new Array(width); //Map
+		for (var i = 0; i < width; i++) { //Map (cont)
+			map[i] = new Array(height);
+			for (var j = 0; j < height; j++) {
+				map[i][j] = 0;
+			}
+		}
+		carve_passages(0, 0, map);
+		
+		world = new Array(width * 2 + 1); //World which uses map, false representing wall, true representing available space
+		for (var i = 0; i < width * 2 + 1; i++) {
+			world[i] = new Array(height * 2 + 1);
+		}
+		
+		for (var i = 0; i < width; i++) {
+			for (var j = 0; j < height; j++) {
+				world[i * 2 + 1][j * 2 + 1] = true;
+				if ((map[i][j] & 1) == 1) {
+					world[i * 2][j * 2 + 1] = true;
+				}
+				if ((map[i][j] & 2) == 2) {
+					world[i * 2 + 2][j * 2 + 1] = true;
+				}
+				if ((map[i][j] & 4) == 4) {
+					world[i * 2 + 1][j * 2] = true;
+				}
+				if ((map[i][j] & 8) == 8) {
+					world[i * 2 + 1][j * 2 + 2] = true;
+				}
+			}
+		}
+	} else {
+		var dir = [];
+		if (world[playerx + 1][playery] == true) {
+			dir.push(2);
+		}
+		if (world[playerx][playery + 1] == true) {
+			dir.push(8);
+		}
+		if (world[playerx - 1][playery] == true) {
+			dir.push(1);
+		}
+		if (world[playerx][playery - 1] == true) {
+			dir.push(4);
+		}
+		if (playerdir == 0) {
+			switch (dir[0]) {
+				case 1:
+					playerx--;
+					playerdir = 1;
+					break;
+				case 2:
+					playerx++;
+					playerdir = 2;
+					break;
+				case 4:
+					playery--;
+					playerdir = 4;
+					break;
+				case 8:
+					playery++;
+					playerdir = 8;
+					break;
+			}
+		} else {
+			switch (playerdir) {
+				case 1:
+					if (dir.indexOf(4) > -1) {
+						playery--
+						playerdir = 4;
+					} else if (dir.indexOf(1) > -1) {
+						playerx--
+						playerdir = 1;
+					} else if (dir.indexOf(8) > -1) {
+						playery++
+						playerdir = 8;
+					} else {
+						playerx++;
+						playerdir = 2;
+					}
+					break;
+				case 2:
+					if (dir.indexOf(8) > -1) {
+						playery++
+						playerdir = 8;
+					} else if (dir.indexOf(2) > -1) {
+						playerx++
+						playerdir = 2;
+					} else if (dir.indexOf(4) > -1) {
+						playery--
+						playerdir = 4;
+					} else {
+						playerx--;
+						playerdir = 1;
+					}
+					break;
+				case 4:
+					if (dir.indexOf(2) > -1) {
+						playerx++
+						playerdir = 2;
+					} else if (dir.indexOf(4) > -1) {
+						playery--
+						playerdir = 4;
+					} else if (dir.indexOf(1) > -1) {
+						playerx--
+						playerdir = 1;
+					} else {
+						playery++;
+						playerdir = 8;
+					}
+					break;
+				case 8:
+					if (dir.indexOf(1) > -1) {
+						playerx--
+						playerdir = 1;
+					} else if (dir.indexOf(8) > -1) {
+						playery++
+						playerdir = 8;
+					} else if (dir.indexOf(2) > -1) {
+						playerx++
+						playerdir = 2;
+					} else {
+						playery--;
+						playerdir = 4;
+					}
+					break;
+			}
+		}
+		
+		topleftx = ((playerx < 3) || (playerx > width * 2 - 3)) ? topleftx : playerx - 3;
+		toplefty = ((playery < 3) || (playery > height * 2 - 3)) ? toplefty : playery - 3;
+	}
 	send_to_holiday(topleftx, toplefty, world)
-	
-	var dir = [];
-	if (world[playerx - 1][playery] == true) {
-		dir.push(1);
-	}
-	if (world[playerx + 1][playery] == true) {
-		dir.push(2);
-	}
-	if (world[playerx][playery - 1] == true) {
-		dir.push(4);
-	}
-	if (world[playerx][playery + 1] == true) {
-		dir.push(8);
-	}
-	switch(dir[Math.floor(Math.random() * dir.length)]) {
-		case 1:
-			playerx--;
-			break;
-		case 2:
-			playerx++;
-			break;
-		case 4:
-			playery--;
-			break;
-		case 8:
-			playery++;
-			break;
-	}
-	
-}, 250);
+}, 1500);

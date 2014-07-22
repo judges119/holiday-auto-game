@@ -1,5 +1,5 @@
 # Automated Maze Game for Holiday by Moore's Cloud
-This project is a Node.js script that when run creates a virtual maze which an automated, AI player attempts to navigate. The maze is outputted to a set of Holiday by Moore's Cloud lights in a 7x7+1 square (with tail) configuration via the Secret API.
+This project is a Node.js script that when run creates a virtual maze which an automated, AI player attempts to navigate. The maze is output to a set of Holiday by Moore's Cloud lights in a 7x7+1 square (with tail) configuration via the Secret API.
 
 ### MIT License
 Copyright (c) 2014 Adam O'Grady
