@@ -140,8 +140,8 @@ function player_movement(dir) {
 /*
  * Display the current view on the Holiday lights.
  *
- * tlx = top-left-x coordinate of display
- * tly = top-left-y coordinate of display
+ * tlx = top-left-x coordinate of display (not currently used)
+ * tly = top-left-y coordinate of display (not currently used)
  */
 function send_to_holiday(tlx, tly, world) {
 	var buf = new Buffer(160); //Buffer for data pertaining to Holiday lights, 160 bytes long
@@ -185,6 +185,10 @@ function send_to_holiday(tlx, tly, world) {
 			}
 		}
 	}
+	
+	buf.write(0, x++); //Fill the last light with emptiness
+	buf.write(0, x++);
+	buf.write(0, x++);
 	
 	var s = dgram.createSocket('udp4'); //Create UDP socket to send data over
 	s.send(buf, 0, buf.length, 9988, process.argv[2], function(err, bytes) { //Send data about lights over UDP socket (IP address of Holiday passed as argument...
